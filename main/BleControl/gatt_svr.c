@@ -140,6 +140,18 @@ gatt_svc_access(uint16_t conn_handle, uint16_t attr_handle,
 {
     const ble_uuid_t *uuid;
     int rc;
+	
+	//============================= ADICIONEI PARA PERMITIR APENAS GATT SEGURO ====================================
+	struct ble_gap_conn_desc desc;
+	/* 1. VERIFICAÇÃO DE SEGURANÇA ATIVA */
+	rc = ble_gap_conn_find(conn_handle, &desc);
+	if (rc != 0 || !desc.sec_state.encrypted) {
+	MODLOG_DFLT(ERROR, "Acesso negado: Link não criptografado!\n");
+	/* Retorna erro de autenticação para o Client */
+	return BLE_ATT_ERR_INSUFFICIENT_AUTHEN; 
+	}
+	//============================= FIM DO MOD ====================================
+
 
     switch (ctxt->op) {
     case BLE_GATT_ACCESS_OP_READ_CHR:

@@ -196,45 +196,33 @@ ble_spp_server_advertise(void)
       * ===================================================== */
      case BLE_GAP_EVENT_CONNECT: {
 
-         if (event->connect.status != 0) {
-             MODLOG_DFLT(INFO,
-                         "Connection failed; status=%d",
-                         event->connect.status);
+		MODLOG_DFLT(INFO, "connection %s; status=%d ",
+		                    event->connect.status == 0 ? "established" : "failed",
+		                    event->connect.status);
 
-             ble_spp_server_advertise();
-             return 0;
-         }
+		if (event->connect.status == 0)//Se está conectado...
+		{
+			rc = ble_gap_conn_find(event->connect.conn_handle, &desc);
+			assert(rc == 0);
+			
+			ESP_LOGI("SEC","Bonded=%d Encrypted=%d Authenticated=%d", desc.sec_state.bonded,desc.sec_state.encrypted,desc.sec_state.authenticated);
+			
+			//Segurança / exigencia de pareamento ou bounding
+			if (desc.sec_state.bonded || button_is_pairing_allowed())
+			{
+				ESP_LOGI("SEC","Segurança ativada, permite pareamento");
+				ble_gap_security_initiate(event->connect.conn_handle);
+			}else{
+				//Se não está pareando e nem já salvo desconecta para proucurar por outro
+				ble_gap_terminate(event->connect.conn_handle, BLE_ERR_AUTH_FAIL);
+			}
+			ble_spp_server_print_conn_desc(&desc);
+		}
 
-         MODLOG_DFLT(INFO, "Connection established");
-
-         rc = ble_gap_conn_find(event->connect.conn_handle, &desc);
-         assert(rc == 0);
-
-         ESP_LOGI("SEC",
-                  "Bonded=%d Encrypted=%d Authenticated=%d",
-                  desc.sec_state.bonded,
-                  desc.sec_state.encrypted,
-                  desc.sec_state.authenticated);
-
-         /* =====================================================
-          * SECURITY POLICY
-          * ===================================================== */
-
-         /* CASO — Já é bonded → permitir reconexão automática */
-         if (desc.sec_state.bonded) {
-
-             ESP_LOGI("SEC", "Known bonded device: initiating security");
-
-             ble_gap_security_initiate(event->connect.conn_handle);
-             return 0;
-         }
-		 
-         /* CASO — Não é bonded e botão permite pareamento */
-         ESP_LOGI("SEC",
-                  "New device and pairing allowed: initiating security");
-
-         ble_gap_security_initiate(event->connect.conn_handle);
-		 
+		 /*Se a conexão falhar e ou poder ter mais conexão volta a proucurar*/
+		 if (event->connect.status != 0 || CONFIG_BT_NIMBLE_MAX_CONNECTIONS > 1) {
+		 	ble_spp_server_advertise();
+		 }
          return 0;
      }
 
@@ -256,38 +244,26 @@ ble_spp_server_advertise(void)
       * ENCRYPTION CHANGE EVENT
       * ===================================================== */
      case BLE_GAP_EVENT_ENC_CHANGE:
-
+	 /* Ao usar a função ble_gap_security_initiate() entra aqui */
          if (event->enc_change.status == 0) {
+			
+             ESP_LOGI("SEC","Encryption successful; conn_handle=%d",event->enc_change.conn_handle);
 
-             ESP_LOGI("SEC",
-                      "Encryption successful; conn_handle=%d",
-                      event->enc_change.conn_handle);
-
-			if (desc.sec_state.bonded && button_is_pairing_allowed()){
+			if (button_is_pairing_allowed()){
+				//Se está aqui quer dizer que já está conectado pode parar de proucurar
 				teste_pairing_mode(false);
 				ESP_LOGI("SEC", "Pairing mode disabled after success.");
+				//apos conectar com segurança o bonded deve ser igual a 1
+				ESP_LOGI("SEC","Bonded=%d",desc.sec_state.bonded);
+				ESP_LOGI("SEC","peers id addr=%d",desc.peer_id_addr);
+				ESP_LOGI("SEC","key_size=%d",desc.sec_state.key_size);
 			}
-			/* CASO 2 — Não é bonded e botão NÃO permite pareamento */
-				 
-			if (!desc.sec_state.bonded && !button_is_pairing_allowed()) {
-
-				ESP_LOGW("SEC","Unbonded device and pairing not allowed: disconnecting");
-				ble_gap_terminate(event->connect.conn_handle, BLE_ERR_AUTH_FAIL);
-				return 0;
-			}
-
 			         
-
          } else {
-
-             ESP_LOGE("SEC",
-                      "Encryption failed; status=%d",
-                      event->enc_change.status);
-
-             ble_gap_terminate(event->enc_change.conn_handle,
+			ESP_LOGE("SEC","Encryption failed; status=%d",event->enc_change.status);
+			ble_gap_terminate(event->enc_change.conn_handle,
                                BLE_ERR_AUTH_FAIL);
          }
-
          return 0;
 
      /* =====================================================
@@ -415,8 +391,6 @@ void ble_spp_server_host_task(void *param)
 }
 
 
-
-
 void ble_server_uart_task(void *pvParameters)
 {
     MODLOG_DFLT(INFO, "BLE server UART_task started\n");
@@ -524,9 +498,7 @@ void ble_spp_init(void)
 		ble_hs_cfg.sm_io_cap  = BLE_SM_IO_CAP_NO_IO;
 		ble_hs_cfg.sm_our_key_dist = BLE_SM_PAIR_KEY_DIST_ENC | BLE_SM_PAIR_KEY_DIST_ID;
 		ble_hs_cfg.sm_their_key_dist = BLE_SM_PAIR_KEY_DIST_ENC | BLE_SM_PAIR_KEY_DIST_ID;
-		
-		
-		
+				
 	    int rc;
 		/* Register custom service */
 	    rc = gatt_svr_init();
@@ -537,6 +509,7 @@ void ble_spp_init(void)
 	    assert(rc == 0);
 		
 		ble_store_config_init();
+		
 			nimble_port_freertos_init(ble_spp_server_host_task);
 
 }

@@ -5,7 +5,8 @@
 #include "esp_log.h"
 
 /* ===== PINOS ORIGINAIS ===== */
-#define GPIO_LED_INTERNO 48
+#define GPIO_LED_INTERNO 1
+//48
 
 
 #define GPIO_ACTIVE_LEVEL   1
@@ -60,7 +61,7 @@ void leds_off(void)
 }
 
 
-static const char *TAG_LED = "LED_CMD";
+//static const char *TAG_LED = "LED_CMD";
 
 void pairing_blink_leds(void)
 {
@@ -68,10 +69,10 @@ void pairing_blink_leds(void)
 
     if (led_blink_state) {
         leds_on();
-		ESP_LOGI(TAG_LED, "LED ON");
+		//ESP_LOGI(TAG_LED, "LED ON");
     } else {
         leds_off();
-		ESP_LOGI(TAG_LED, "LED OFF");
+		//ESP_LOGI(TAG_LED, "LED OFF");
     }
 }
 
