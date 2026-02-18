@@ -67,23 +67,23 @@ static const struct ble_gatt_svc_def gatt_svr_svcs[] = {
                 //.uuid = &gatt_svr_chr_uuid.u,
 				.uuid = BLE_UUID16_DECLARE(BLE_SVC_SPP_CHR_UUID16),
 				.access_cb = gatt_svc_access,
-#if CONFIG_EXAMPLE_ENCRYPTION
+//#if CONFIG_EXAMPLE_ENCRYPTION
                 .flags = BLE_GATT_CHR_F_READ | BLE_GATT_CHR_F_WRITE |
                 BLE_GATT_CHR_F_READ_ENC | BLE_GATT_CHR_F_WRITE_ENC |
                 BLE_GATT_CHR_F_NOTIFY | BLE_GATT_CHR_F_INDICATE,
-#else
-                .flags = BLE_GATT_CHR_F_READ | BLE_GATT_CHR_F_WRITE | BLE_GATT_CHR_F_NOTIFY | BLE_GATT_CHR_F_INDICATE,
-#endif
+//#else
+//                .flags = BLE_GATT_CHR_F_READ | BLE_GATT_CHR_F_WRITE | BLE_GATT_CHR_F_NOTIFY | BLE_GATT_CHR_F_INDICATE,
+//#endif
 				.val_handle = &ble_spp_svc_gatt_read_val_handle,
                 //.val_handle = &gatt_svr_chr_val_handle,
                 .descriptors = (struct ble_gatt_dsc_def[])
                 { {
                       .uuid = &gatt_svr_dsc_uuid.u,
-#if CONFIG_EXAMPLE_ENCRYPTION
+//#if CONFIG_EXAMPLE_ENCRYPTION
                       .att_flags = BLE_ATT_F_READ | BLE_ATT_F_READ_ENC,
-#else
-                      .att_flags = BLE_ATT_F_READ,
-#endif
+//#else
+ //                     .att_flags = BLE_ATT_F_READ,
+//#endif
 					  .access_cb = gatt_svc_access,
                     }, {
                       0, /* No more descriptors in this characteristic */
