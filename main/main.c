@@ -74,9 +74,9 @@ void app_main(void)
 	}
 	ESP_ERROR_CHECK(ret);
 	leds_init();
-	ble_spp_init();
 	button_init();
-	nvs_read_test();
+	ble_spp_init();
+
 	xTaskCreate(
 		    button_pairing_task,
 		    "button_pairing_task",

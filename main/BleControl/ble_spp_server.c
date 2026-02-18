@@ -3,6 +3,7 @@
 #include "nimble/nimble_port_freertos.h"
 #include "host/ble_hs.h"
 #include "host/util/util.h"
+#include "nvs.h"
 #include "services/gap/ble_svc_gap.h"
 #include "services/gatt/ble_svc_gatt.h"
 #include "ble_spp_server.h"
@@ -435,6 +436,7 @@ void ble_server_uart_task(void *pvParameters)
     vTaskDelete(NULL);
 }
 
+
 void ble_forget_all_bonds(void)
 {
 	ESP_LOGW("SYS", "Performing Total Factory Reset...");
@@ -445,10 +447,28 @@ void ble_forget_all_bonds(void)
 	    // Apaga a partição NVS padrão
 	    nvs_flash_deinit();
 	    nvs_flash_erase();
-	    
+		//nvs_flash_erase_partition("storage");
+	    //nvs_commit(nvs_handle_t handle)
 	    ESP_LOGI("SYS", "Flash erased. Restarting...");
 	    esp_restart();
 }
+/*void ble_forget_all_bonds(void)
+{
+    ESP_LOGW("SYS", "Performing Total Factory Reset...");
+
+    nimble_port_stop();
+
+    nvs_flash_deinit();
+
+    esp_err_t err = nvs_flash_erase_partition("nvs");
+    if (err != ESP_OK) {
+        ESP_LOGE("SYS", "Erase failed: %s", esp_err_to_name(err));
+    } else {
+        ESP_LOGI("SYS", "Partition erased successfully.");
+    }
+
+    esp_restart();
+}*/
 static void ble_spp_uart_init(void)
 {
     uart_config_t uart_config = {
@@ -468,6 +488,7 @@ static void ble_spp_uart_init(void)
     uart_set_pin(UART_NUM_0, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
     xTaskCreate(ble_server_uart_task, "uTask", 4096, (void *)UART_NUM_0, 8, NULL);
 }
+
 
 void ble_spp_init(void)
 {
@@ -510,6 +531,7 @@ void ble_spp_init(void)
 		
 		ble_store_config_init();
 		
-			nimble_port_freertos_init(ble_spp_server_host_task);
+		nimble_port_freertos_init(ble_spp_server_host_task);
+
 
 }
