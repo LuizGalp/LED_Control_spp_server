@@ -21,10 +21,10 @@
  // 1 segundo
  
  /* ===================== GLOBAL STATE ===================== */
-  volatile  bool ble_pairing_allowed = false;
+ volatile  bool ble_pairing_allowed = false;
  //para o ble saber está no modo de paring
  static uint32_t pairing_time_ms = 0;
-   volatile bool pairing_mode = false;
+ volatile bool pairing_mode = false;
  // para o ble saber que é para dar reset
  //Obs:separar depois um .c só para controle de botão talvez fique mais organizado
 
