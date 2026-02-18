@@ -1,0 +1,22 @@
+Command: ninja flash
+fatal: bad config line 2 in file C:/esp/v5.5.2/esp-idf/.git/modules/components/bootloader/subproject/components/micro-ecc/micro-ecc/config
+CMake Error at C:/esp/v5.5.2/esp-idf/tools/cmake/component.cmake:492 (add_library):
+  Cannot find source file:
+
+    C:/Users/GalpTelegestao/Desktop/LED_Control_spp_server/main/BleControl/ble_store_config.c
+
+  Tried extensions .c .C .c++ .cc .cpp .cxx .cu .mpp .m .M .mm .ixx .cppm
+  .ccm .cxxm .c++m .h .hh .h++ .hm .hpp .hxx .in .txx .f .F .for .f77 .f90
+  .f95 .f03 .hip .ispc
+Call Stack (most recent call first):
+  main/CMakeLists.txt:3 (idf_component_register)
+
+
+CMake Error at C:/esp/v5.5.2/esp-idf/tools/cmake/component.cmake:492 (add_library):
+  No SOURCES given to target: __idf_main
+Call Stack (most recent call first):
+  main/CMakeLists.txt:3 (idf_component_register)
+
+
+CMake Generate step failed.  Build files cannot be regenerated correctly.
+ninja: error: rebuilding 'build.ninja': subcommand failed
