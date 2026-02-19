@@ -208,15 +208,10 @@ ble_spp_server_advertise(void)
 			
 			ESP_LOGI("SEC","Bonded=%d Encrypted=%d Authenticated=%d", desc.sec_state.bonded,desc.sec_state.encrypted,desc.sec_state.authenticated);
 			
-			//Segurança / exigencia de pareamento ou bounding
-			if (desc.sec_state.bonded || button_is_pairing_allowed())
-			{
-				ESP_LOGI("SEC","Segurança ativada, permite pareamento");
+			
+				ESP_LOGI("SEC","Inicializa a segurança antes");
 				ble_gap_security_initiate(event->connect.conn_handle);
-			}else{
-				//Se não está pareando e nem já salvo desconecta para proucurar por outro
-				ble_gap_terminate(event->connect.conn_handle, BLE_ERR_AUTH_FAIL);
-			}
+			
 			ble_spp_server_print_conn_desc(&desc);
 		}
 
@@ -233,6 +228,8 @@ ble_spp_server_advertise(void)
      case BLE_GAP_EVENT_REPEAT_PAIRING:
 
          ESP_LOGW("SEC", "Repeat pairing detected → deleting old bond");
+		 ESP_LOGI("SEC", "========================================================= estava pareado =========================================================");
+		 ESP_LOGI("SEC", "id do server; peer_id_addr=%d",desc.peer_id_addr);
 
          rc = ble_gap_conn_find(event->repeat_pairing.conn_handle, &desc);
          if (rc == 0) {
@@ -249,16 +246,23 @@ ble_spp_server_advertise(void)
          if (event->enc_change.status == 0) {
 			
              ESP_LOGI("SEC","Encryption successful; conn_handle=%d",event->enc_change.conn_handle);
+			 //Segurança / exigencia de pareamento ou bounding
+			 if (desc.sec_state.bonded || button_is_pairing_allowed())
+			 {
+			 		ESP_LOGI("SEC","Segurança ativada, permite pareamento");
+					//Se está aqui quer dizer que já está conectado pode parar de proucurar
+					teste_pairing_mode(false);
+					ESP_LOGI("SEC", "Pairing mode disabled after success.");
+					//apos conectar com segurança o bonded deve ser igual a 1
+					ESP_LOGI("SEC","Bonded=%d",desc.sec_state.bonded);
+					ESP_LOGI("SEC","peers id addr=%d",desc.peer_id_addr);
+					ESP_LOGI("SEC","key_size=%d",desc.sec_state.key_size);
+			 }else{
+			 		//Se não está pareando e nem já salvo desconecta para proucurar por outro
+			 		ESP_LOGI("SEC","Fora do modo de pareamento e sem bounding");
+			 		ble_gap_terminate(event->connect.conn_handle, BLE_ERR_AUTH_FAIL);
+			 }
 
-			if (button_is_pairing_allowed()){
-				//Se está aqui quer dizer que já está conectado pode parar de proucurar
-				teste_pairing_mode(false);
-				ESP_LOGI("SEC", "Pairing mode disabled after success.");
-				//apos conectar com segurança o bonded deve ser igual a 1
-				ESP_LOGI("SEC","Bonded=%d",desc.sec_state.bonded);
-				ESP_LOGI("SEC","peers id addr=%d",desc.peer_id_addr);
-				ESP_LOGI("SEC","key_size=%d",desc.sec_state.key_size);
-			}
 			         
          } else {
 			ESP_LOGE("SEC","Encryption failed; status=%d",event->enc_change.status);
@@ -440,35 +444,18 @@ void ble_server_uart_task(void *pvParameters)
 void ble_forget_all_bonds(void)
 {
 	ESP_LOGW("SYS", "Performing Total Factory Reset...");
-	    
+		
 	    // Desinicializa o BLE para liberar a NVS
 	    nimble_port_stop();
 	    
 	    // Apaga a partição NVS padrão
 	    nvs_flash_deinit();
 	    nvs_flash_erase();
-		//nvs_flash_erase_partition("storage");
-	    //nvs_commit(nvs_handle_t handle)
 	    ESP_LOGI("SYS", "Flash erased. Restarting...");
 	    esp_restart();
 }
-/*void ble_forget_all_bonds(void)
-{
-    ESP_LOGW("SYS", "Performing Total Factory Reset...");
 
-    nimble_port_stop();
 
-    nvs_flash_deinit();
-
-    esp_err_t err = nvs_flash_erase_partition("nvs");
-    if (err != ESP_OK) {
-        ESP_LOGE("SYS", "Erase failed: %s", esp_err_to_name(err));
-    } else {
-        ESP_LOGI("SYS", "Partition erased successfully.");
-    }
-
-    esp_restart();
-}*/
 static void ble_spp_uart_init(void)
 {
     uart_config_t uart_config = {
@@ -532,6 +519,4 @@ void ble_spp_init(void)
 		ble_store_config_init();
 		
 		nimble_port_freertos_init(ble_spp_server_host_task);
-
-
 }

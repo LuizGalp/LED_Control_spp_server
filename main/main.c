@@ -76,7 +76,7 @@ void app_main(void)
 	leds_init();
 	button_init();
 	ble_spp_init();
-
+	nvs_read_test();
 	xTaskCreate(
 		    button_pairing_task,
 		    "button_pairing_task",
