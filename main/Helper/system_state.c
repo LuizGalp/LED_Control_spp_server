@@ -9,12 +9,17 @@
  #include "system_state.h"
  #include "LedControl/LedFunctions.h"
  #include "BleControl/ble_spp_server.h"
+#include "rom/ets_sys.h"
+#include <stdbool.h>
+#include <stdint.h>
  /* ===== Define Botao ===== */
  #define GPIO_BUTTON   2
 
  /* ===== VARIAVEIS ===== */
- #define PAIRING_HOLD_TIME_MS     5000   
+ #define PAIRING_HOLD_TIME_MS     	5000
  // 5 segundos 
+ #define PAIRING_RESET_TIME_MS     	7000      
+ // 7 segundos 
  #define PAIRING_TIMEOUT_MS      60000 
  // 2 minutos
  #define BLINK_INTERVAL_MS       1000    
@@ -25,13 +30,14 @@
  //para o ble saber está no modo de paring
  static uint32_t pairing_time_ms = 0;
  volatile bool pairing_mode = false;
+ volatile bool reset_mode = false;
  // para o ble saber que é para dar reset
  //Obs:separar depois um .c só para controle de botão talvez fique mais organizado
 
  /* ===================== VARIAVEIS LOCAIS ===================== */
  static uint32_t button_hold_ms = 0;
  static uint32_t blink_time_ms = 0;
- static bool pairing_triggered = false; //variavel para caso o botão ainda esteja apertado quando for feito o pareamento
+ static bool parar_log = false;
  /* ===================== PROTOTIPOS ===================== */
 
  /* ===================== COMEÇO ===================== */
@@ -47,7 +53,9 @@
      };
      gpio_config(&io_conf);
  }
-
+ #define BUT_ON 0
+ #define BUT_OFF 1
+ 
  void button_pairing_task(void *pvParameters)
  {
      const uint32_t poll_delay_ms = 50;
@@ -56,37 +64,48 @@
          int button_state = gpio_get_level(GPIO_BUTTON);
 
  		/* ======================================
- 		         * CONTAGEM DO BOTÃO (SEMPRE)
- 		         * ====================================== */
- 		        if (button_state == 0) {  // botão pressionado (pull-up)
- 		            button_hold_ms += poll_delay_ms;
+         * CONTAGEM DO BOTÃO (SEMPRE)
+         * ====================================== */
+        if (button_state == 0) 
+		{  // botão pressionado (pull-up)
+            button_hold_ms += poll_delay_ms;
 
- 		            /* ===== 5s → ENTRA EM PAREAMENTO ===== */
- 		            if (button_hold_ms >= PAIRING_HOLD_TIME_MS && pairing_mode == false  &&pairing_triggered == false) {
+            /* ===== 5s → ENTRA EM PAREAMENTO ===== */
+            if (button_hold_ms >= PAIRING_HOLD_TIME_MS && button_hold_ms < PAIRING_RESET_TIME_MS && pairing_mode == false && parar_log==false) {
 
- 		                pairing_mode = true;
- 		                ble_pairing_allowed = true;
- 		                pairing_time_ms = 0;
- 		                blink_time_ms = 0;
-						pairing_triggered = true;
+                leds_on();
 
- 		                ESP_LOGI("PAIRING", "Modo de pareamento ATIVADO");
- 		            }
+                ESP_LOGI("PAIRING", "Solte para ativar o modo de pareamento");
+				parar_log=true;
+            }
 
- 		            /* ===== 7s → RESET BLE ===== */
- 		            if (button_hold_ms >= 7000) {
- 		                ESP_LOGW("BLE", "Factory reset triggered by button");
-						ble_forget_all_bonds();
+            /* ===== 7s → RESET BLE ===== */
+            if (button_hold_ms >= PAIRING_RESET_TIME_MS && parar_log==true) {
+				leds_off();
+				parar_log = false;
+                ESP_LOGW("BLE", "Factory reset triggered by button");			
+            }
 
- 		            }
+        } else {
+            /* ======================================
+             * BOTÃO SOLTO → RESET CONTADOR
+             * ====================================== */
+			 if (button_hold_ms >= PAIRING_HOLD_TIME_MS && button_hold_ms < PAIRING_RESET_TIME_MS && pairing_mode == false)
+			 {
+				parar_log=false;
+				pairing_mode = true;
+				ble_pairing_allowed = true;
+				pairing_time_ms = 0;
+				blink_time_ms = 0;
+				ESP_LOGI("PAIRING", "Modo de pareamento ATIVADO");
 
- 		        } else {
- 		            /* ======================================
- 		             * BOTÃO SOLTO → RESET CONTADOR
- 		             * ====================================== */
- 		            button_hold_ms = 0;
-					pairing_triggered = false;
- 		        }
+			 }
+			 if (button_hold_ms >= PAIRING_RESET_TIME_MS)
+			 {
+				ble_forget_all_bonds();
+			 }
+            button_hold_ms = 0;
+        }
          
  		
  		
@@ -130,16 +149,17 @@
  }
  bool teste_pairing_mode(bool mode)
  {
- pairing_mode = mode;
- 
- if (!mode) {
-        ble_pairing_allowed = false;
-        pairing_time_ms = 0;
-        blink_time_ms = 0;
-        leds_off();
-        ESP_LOGI("PAIRING", "Modo pareamento forçado OFF");
-    }
-	
- return pairing_mode;
+	 pairing_mode = mode;
+	 
+	 if (pairing_mode == false)
+	 {
+		ble_pairing_allowed = false;
+		pairing_time_ms = 0;
+		blink_time_ms = 0;
+		leds_off();
+		ESP_LOGI("PAIRING", "Modo pareamento forçado OFF");		
+	 }
+
+	 return pairing_mode;
  }
 

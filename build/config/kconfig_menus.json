@@ -10639,10 +10639,7 @@
                                                 "help": "Defines maximum number of connection reattempts.",
                                                 "id": "BT_NIMBLE_MAX_CONN_REATTEMPT",
                                                 "name": "BT_NIMBLE_MAX_CONN_REATTEMPT",
-                                                "range": [
-                                                    1,
-                                                    255
-                                                ],
+                                                "range": null,
                                                 "title": "Maximum number connection reattempts",
                                                 "type": "int"
                                             }

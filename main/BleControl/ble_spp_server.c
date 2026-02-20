@@ -1,4 +1,7 @@
 /* BLE  ble_spp_server.c */
+#include "esp_nimble_hci.h"
+#include "host/ble_gap.h"
+#include "host/ble_store.h"
 #include "nimble/nimble_port.h"
 #include "nimble/nimble_port_freertos.h"
 #include "host/ble_hs.h"
@@ -72,7 +75,72 @@ void ble_store_config_init();
 /**
  * Logs information about a connection to the console.
  */
+ #define GAP_CASE(x) case x: return #x;
 
+ static const char *gap_event_to_string(uint8_t type)
+ {
+     switch (type)
+     {
+         GAP_CASE(BLE_GAP_EVENT_CONNECT)
+         GAP_CASE(BLE_GAP_EVENT_DISCONNECT)
+         GAP_CASE(BLE_GAP_EVENT_CONN_UPDATE)
+         GAP_CASE(BLE_GAP_EVENT_CONN_UPDATE_REQ)
+         GAP_CASE(BLE_GAP_EVENT_L2CAP_UPDATE_REQ)
+         GAP_CASE(BLE_GAP_EVENT_TERM_FAILURE)
+         GAP_CASE(BLE_GAP_EVENT_DISC)
+         GAP_CASE(BLE_GAP_EVENT_DISC_COMPLETE)
+         GAP_CASE(BLE_GAP_EVENT_ADV_COMPLETE)
+         GAP_CASE(BLE_GAP_EVENT_ENC_CHANGE)
+         GAP_CASE(BLE_GAP_EVENT_PASSKEY_ACTION)
+         GAP_CASE(BLE_GAP_EVENT_NOTIFY_RX)
+         GAP_CASE(BLE_GAP_EVENT_NOTIFY_TX)
+         GAP_CASE(BLE_GAP_EVENT_SUBSCRIBE)
+         GAP_CASE(BLE_GAP_EVENT_MTU)
+         GAP_CASE(BLE_GAP_EVENT_IDENTITY_RESOLVED)
+         GAP_CASE(BLE_GAP_EVENT_REPEAT_PAIRING)
+         GAP_CASE(BLE_GAP_EVENT_PHY_UPDATE_COMPLETE)
+         GAP_CASE(BLE_GAP_EVENT_EXT_DISC)
+         GAP_CASE(BLE_GAP_EVENT_PERIODIC_SYNC)
+         GAP_CASE(BLE_GAP_EVENT_PERIODIC_REPORT)
+         GAP_CASE(BLE_GAP_EVENT_PERIODIC_SYNC_LOST)
+         GAP_CASE(BLE_GAP_EVENT_SCAN_REQ_RCVD)
+         GAP_CASE(BLE_GAP_EVENT_PERIODIC_TRANSFER)
+         GAP_CASE(BLE_GAP_EVENT_PATHLOSS_THRESHOLD)
+         GAP_CASE(BLE_GAP_EVENT_TRANSMIT_POWER)
+         GAP_CASE(BLE_GAP_EVENT_PARING_COMPLETE)
+         GAP_CASE(BLE_GAP_EVENT_SUBRATE_CHANGE)
+         GAP_CASE(BLE_GAP_EVENT_VS_HCI)
+         GAP_CASE(BLE_GAP_EVENT_BIGINFO_REPORT)
+         GAP_CASE(BLE_GAP_EVENT_REATTEMPT_COUNT)
+         GAP_CASE(BLE_GAP_EVENT_AUTHORIZE)
+         GAP_CASE(BLE_GAP_EVENT_TEST_UPDATE)
+         GAP_CASE(BLE_GAP_EVENT_DATA_LEN_CHG)
+         GAP_CASE(BLE_GAP_EVENT_CONNLESS_IQ_REPORT)
+         GAP_CASE(BLE_GAP_EVENT_CONN_IQ_REPORT)
+         GAP_CASE(BLE_GAP_EVENT_CTE_REQ_FAILED)
+		 GAP_CASE(BLE_GAP_EVENT_LINK_ESTAB) //DEPRECATED
+
+         default:
+             return "UNKNOWN_GAP_EVENT";
+     }
+ }
+ /*TESTANDO AINDA*/
+ static bool peer_is_known(const ble_addr_t *peer_addr)
+ {
+     union ble_store_key key;
+     union ble_store_value value;
+
+     memset(&key, 0, sizeof(key));
+     memset(&value, 0, sizeof(value));
+
+     key.sec.peer_addr = *peer_addr;
+
+     int rc = ble_store_read(BLE_STORE_OBJ_TYPE_PEER_SEC,
+                             &key,
+                             &value);
+
+     return (rc == 0);
+ }
 
  static void
  ble_spp_server_print_conn_desc(struct ble_gap_conn_desc *desc)
@@ -183,60 +251,93 @@ ble_spp_server_advertise(void)
  *                                  of the return code is specific to the
  *                                  particular GAP event being signalled.
  */
- 
+ volatile bool flagToConnect = true;
  static int
  ble_spp_server_gap_event(struct ble_gap_event *event, void *arg)
  {
      struct ble_gap_conn_desc desc;
      int rc;
+	 if (!event) {
+	     ESP_LOGW("SEC", "GAP callback called with NULL event!");
+	     return 0;
+	 }
 
+	 if (event->type > 40) {
+	     ESP_LOGW("SEC", "Invalid GAP event type: %u", event->type);
+	     return 0;
+	 }
+
+//	 ESP_LOGI("SEC","Evento do gap=%d", event->type);
+//	 ESP_LOGI("SEC", "Evento do gap=%s", gap_event_to_string(event->type));
+	 ESP_LOGI("SEC", "FLAG = %u // Evento do gap = %d - %s", flagToConnect, event->type,gap_event_to_string(event->type));
+	
      switch (event->type) {
 
      /* =====================================================
       * CONNECT EVENT
       * ===================================================== */
-     case BLE_GAP_EVENT_CONNECT: {
-
+     case BLE_GAP_EVENT_CONNECT: 
+	 if (flagToConnect == true)
+	 {
+		
 		MODLOG_DFLT(INFO, "connection %s; status=%d ",
 		                    event->connect.status == 0 ? "established" : "failed",
 		                    event->connect.status);
 
 		if (event->connect.status == 0)//Se está conectado...
 		{
+			ESP_LOGW("SEC", "ID do client; peer_id_addr=%d",desc.peer_id_addr);
+
 			rc = ble_gap_conn_find(event->connect.conn_handle, &desc);
 			assert(rc == 0);
 			
 			ESP_LOGI("SEC","Bonded=%d Encrypted=%d Authenticated=%d", desc.sec_state.bonded,desc.sec_state.encrypted,desc.sec_state.authenticated);
 			
+			bool known = peer_is_known(&desc.peer_id_addr);
 			
-				ESP_LOGI("SEC","Inicializa a segurança antes");
-				ble_gap_security_initiate(event->connect.conn_handle);
+			ESP_LOGI("SEC","Known=%d Bonded=%d Encrypted=%d",
+			         known,desc.sec_state.bonded,desc.sec_state.encrypted);
+					 
+			if (known) {
+				ESP_LOGI("SEC","Peer conhecido: inicia segurança");
+			    ble_gap_security_initiate(event->connect.conn_handle);
+			}
+			else if (button_is_pairing_allowed()) {
+				ESP_LOGI("SEC","Novo peer permitido: inicia pareamento");
+			    ble_gap_security_initiate(event->connect.conn_handle);
+			}
+			else {
+				ESP_LOGW("SEC","Peer desconhecido fora do modo pareamento → desconectando");
+				ble_gap_terminate(event->connect.conn_handle,BLE_ERR_AUTH_FAIL);
+			}
+//			ESP_LOGI("SEC","Inicializa a segurança antes");
+//			ble_gap_security_initiate(event->connect.conn_handle);
 			
-			ble_spp_server_print_conn_desc(&desc);
+			//ble_spp_server_print_conn_desc(&desc);
 		}
 
 		 /*Se a conexão falhar e ou poder ter mais conexão volta a proucurar*/
 		 if (event->connect.status != 0 || CONFIG_BT_NIMBLE_MAX_CONNECTIONS > 1) {
-		 	ble_spp_server_advertise();
+			if (flagToConnect == true) ble_spp_server_advertise();
 		 }
-         return 0;
      }
 
+     return 0;
      /* =====================================================
       * REPEAT PAIRING EVENT
       * ===================================================== */
-     case BLE_GAP_EVENT_REPEAT_PAIRING:
-
-         ESP_LOGW("SEC", "Repeat pairing detected → deleting old bond");
-		 ESP_LOGI("SEC", "========================================================= estava pareado =========================================================");
-		 ESP_LOGI("SEC", "id do server; peer_id_addr=%d",desc.peer_id_addr);
-
-         rc = ble_gap_conn_find(event->repeat_pairing.conn_handle, &desc);
-         if (rc == 0) {
-             ble_store_util_delete_peer(&desc.peer_id_addr);
-         }
-
-         return BLE_GAP_REPEAT_PAIRING_RETRY;
+//     case BLE_GAP_EVENT_REPEAT_PAIRING:
+//
+//         ESP_LOGW("SEC", "Repeat pairing detected → deleting old bond");
+//		 ESP_LOGI("SEC", "========================================================= estava pareado =========================================================");
+//		 ESP_LOGI("SEC", "id do server; peer_id_addr=%d",desc.peer_id_addr);
+//
+//         rc = ble_gap_conn_find(event->repeat_pairing.conn_handle, &desc);
+//         if (rc == 0) {
+//             ble_store_util_delete_peer(&desc.peer_id_addr);
+//         }
+//
+//         return BLE_GAP_REPEAT_PAIRING_RETRY;
 
      /* =====================================================
       * ENCRYPTION CHANGE EVENT
@@ -244,8 +345,14 @@ ble_spp_server_advertise(void)
      case BLE_GAP_EVENT_ENC_CHANGE:
 	 /* Ao usar a função ble_gap_security_initiate() entra aqui */
          if (event->enc_change.status == 0) {
+			struct ble_gap_conn_desc desc;
+			ble_gap_conn_find(event->enc_change.conn_handle, &desc);
 			
              ESP_LOGI("SEC","Encryption successful; conn_handle=%d",event->enc_change.conn_handle);
+			 ESP_LOGI("SEC","Bonded=%d",desc.sec_state.bonded);
+			 ESP_LOGW("SEC", "ID do client; peer_id_addr=%d",desc.peer_id_addr);
+
+
 			 //Segurança / exigencia de pareamento ou bounding
 			 if (desc.sec_state.bonded || button_is_pairing_allowed())
 			 {
@@ -254,13 +361,15 @@ ble_spp_server_advertise(void)
 					teste_pairing_mode(false);
 					ESP_LOGI("SEC", "Pairing mode disabled after success.");
 					//apos conectar com segurança o bonded deve ser igual a 1
-					ESP_LOGI("SEC","Bonded=%d",desc.sec_state.bonded);
 					ESP_LOGI("SEC","peers id addr=%d",desc.peer_id_addr);
 					ESP_LOGI("SEC","key_size=%d",desc.sec_state.key_size);
-			 }else{
+			 }else if (!desc.sec_state.bonded && !button_is_pairing_allowed())
+			 {
 			 		//Se não está pareando e nem já salvo desconecta para proucurar por outro
 			 		ESP_LOGI("SEC","Fora do modo de pareamento e sem bounding");
-			 		ble_gap_terminate(event->connect.conn_handle, BLE_ERR_AUTH_FAIL);
+					ble_gap_terminate(event->enc_change.conn_handle,BLE_ERR_AUTH_FAIL);
+			 }else{
+				ESP_LOGI("SEC","Comportamento inesperado");
 			 }
 
 			         
@@ -275,7 +384,9 @@ ble_spp_server_advertise(void)
       * SUBSCRIBE EVENT
       * ===================================================== */
      case BLE_GAP_EVENT_SUBSCRIBE:
-
+ 		if (flagToConnect == false) return 0;
+//		ESP_LOGI("SEC", "FLAG = %u // Evento do gap=%d", flagToConnect, event->type);
+		ESP_LOGI("SEC", " # ERROR IF FLAG 0 #- FLAG = %u // Evento do gap = %d - %s", flagToConnect, event->type,gap_event_to_string(event->type));
          rc = ble_gap_conn_find(event->subscribe.conn_handle, &desc);
 
          if (rc == 0 && desc.sec_state.encrypted) {
@@ -309,7 +420,9 @@ ble_spp_server_advertise(void)
          conn_handle_subs[event->disconnect.conn.conn_handle] = false;
 
          /* Sempre voltar a anunciar */
-         ble_spp_server_advertise();
+		 if (flagToConnect == true){ ble_spp_server_advertise();}
+			
+		 
 
          return 0;
 
@@ -441,19 +554,71 @@ void ble_server_uart_task(void *pvParameters)
 }
 
 
+void ler(){
+	
+	nvs_iterator_t it;
+		nvs_entry_find("nvs", NULL, NVS_TYPE_ANY,&it);
+		while (it != NULL) {
+		    nvs_entry_info_t info;
+		    nvs_entry_info(it, &info);
+		    ESP_LOGI("NVS", "namespace: %s | key: %s", info.namespace_name, info.key);
+		    nvs_entry_next(&it);
+		}
+	
+}
+
+
 void ble_forget_all_bonds(void)
 {
-	ESP_LOGW("SYS", "Performing Total Factory Reset...");
-		
-	    // Desinicializa o BLE para liberar a NVS
-	    nimble_port_stop();
-	    
-	    // Apaga a partição NVS padrão
-	    nvs_flash_deinit();
-	    nvs_flash_erase();
-	    ESP_LOGI("SYS", "Flash erased. Restarting...");
-	    esp_restart();
+	flagToConnect = false;
+	teste_pairing_mode(false);
+	vTaskDelay(pdMS_TO_TICKS(1000)); /* aguarda desconexões */
+	ler();
+    ESP_LOGW("SYS", "Clearing all BLE bonds and peers...");
+    /* 3. Para o advertising atual (se estiver rodando) */
+    
+	ble_gap_adv_stop();
+    /* 1. Desconecta todos os peers ativos */
+    for (uint16_t handle = 0; handle < CONFIG_BT_NIMBLE_MAX_CONNECTIONS; handle++) {
+        struct ble_gap_conn_desc desc;
+        if (ble_gap_conn_find(handle, &desc) == 0) {
+			ESP_LOGI("BLE", "Removed Connection.");
+            ble_gap_terminate(handle, BLE_ERR_REM_USER_CONN_TERM);
+        }
+    }
+	ble_gap_adv_stop();
+
+
+    vTaskDelay(pdMS_TO_TICKS(1000)); /* aguarda desconexões */
+
+    /* 2. Limpa todos os bonds/peers enquanto o host ainda está vivo */
+	/* Clear bonding database */
+	int rc = ble_store_clear();
+	if (rc == 0)
+	{
+	    ESP_LOGI("SYS", "Bond database cleared successfully.");
+	}
+	else
+	{
+	    ESP_LOGE("SYS", "Failed to clear bond database (rc=%d)", rc);
+	}
+
+
+    /* 4. Reinicia o advertising */
+	vTaskDelay(pdMS_TO_TICKS(3000)); /* aguarda desconexões */
+	ler();
+	
+//	ble_spp_init();
+	ESP_LOGI("SYS", "All bonds cleared. Advertising restarted.");
+	ble_spp_server_advertise();
+	
+
+	flagToConnect = true;
 }
+
+
+
+
 
 
 static void ble_spp_uart_init(void)
